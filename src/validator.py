@@ -227,9 +227,8 @@ class Level1Validator:
                     break
                 dl = rel + t["d"] - 1
                 window_end = min(dl, self._horizon)
-                if window_end - rel + 1 < t["e"]:
-                    # truncated tail window cannot fit e ticks; later ones are worse
-                    break
+                # 與評分器（test2）一致：release ≤ horizon 的 instance 一律納入。
+                # 若截斷後視窗塞不下 e 格，3-2 / 3-3 會把它列為違規，不再默默丟掉。
                 jobs.append(
                     _Job(
                         job_id=f"{tid}_{k}",
@@ -570,7 +569,8 @@ class Level1Validator:
                 r.violations.append(
                     f"{job.job_id}: completes at t={completion} > deadline {job.deadline}"
                 )
-            responses.append(completion - job.release + 1)
+            # R_j = C_j - r_j（與規格 5-4、evaluator 一致）
+            responses.append(completion - job.release)
         self._finalize(r)
         if responses and not r.violations:
             avg = sum(responses) / len(responses)
