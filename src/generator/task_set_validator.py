@@ -1,6 +1,6 @@
 """Module for validating generated task sets."""
 
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 
 class TaskSetValidator:
@@ -24,15 +24,54 @@ class TaskSetValidator:
         Returns:
             True if all validation checks pass, False otherwise.
         """
-        # 四個條件全部通過才算合格，任一失敗立即回傳 False（短路求值）
+        # 五個條件全部通過才算合格，任一失敗立即回傳 False（短路求值）
         if not self._validate_frame_size(frame_size):
             return False
         if not self._validate_density(tasks_dict):
+            return False
+        if not self._validate_tail_jobs_fit(tasks_dict):
             return False
         if not self._validate_jobs_count(tasks_dict):
             return False
         if not self._validate_w(tasks_dict):
             return False
+        return True
+
+    def _job_releases(self, task: dict) -> List[int]:
+        """Returns the absolute release of every instance with release <= horizon.
+
+        Mirrors the grader (test2) expansion: instance k (1-indexed) is released
+        at ``r + (k - 1) * p`` and every instance released within the horizon
+        counts, even if its absolute deadline lies beyond the horizon.
+
+        Args:
+            task: A generated task dictionary with keys ``r`` and ``p``.
+
+        Returns:
+            Absolute release times of all instances inside the horizon.
+        """
+        return list(range(task["r"], self._horizon + 1, task["p"]))
+
+    def _validate_tail_jobs_fit(self, tasks_dict: Dict[str, dict]) -> bool:
+        """Validates that every instance can finish its e ticks by the horizon.
+
+        Assumption 3 requires every job to complete before its deadline and
+        within t = H, and the grader counts every instance with release <= H.
+        An instance whose window ``[release, min(release + d - 1, H)]`` is
+        shorter than ``e`` can never be completed by any scheduler, so such a
+        task set is rejected here (rubric 3-2 / 3-3).
+
+        Args:
+            tasks_dict: The dictionary of generated tasks.
+
+        Returns:
+            True if every instance's (horizon-truncated) window fits ``e`` ticks.
+        """
+        for t in tasks_dict.values():
+            for rel in self._job_releases(t):
+                window_end = min(rel + t["d"] - 1, self._horizon)
+                if window_end - rel + 1 < t["e"]:
+                    return False
         return True
 
     def _validate_density(self, tasks_dict: Dict[str, dict]) -> bool:
@@ -70,16 +109,8 @@ class TaskSetValidator:
     def _validate_jobs_count(self, tasks_dict: Dict[str, dict]) -> bool:
         """Validates that the total job count within the horizon exceeds 30."""
         # 作業規格 1-3：72 小時內展開後的 job 總數必須 > 30
-        # 展開規則：job 的 release = r + k*p，完成時間 = release + d，必須 ≤ horizon
-        jobs_count = 0
-        for t in tasks_dict.values():
-            r = t["r"]
-            p = t["p"]
-            d = t["d"]
-            k = 0
-            while r + k * p + d <= self._horizon:
-                jobs_count += 1
-                k += 1
+        # 展開規則與評分器（test2）一致：所有 release ≤ horizon 的 instance 都算
+        jobs_count = sum(len(self._job_releases(t)) for t in tasks_dict.values())
         return jobs_count > 30
 
     def _validate_w(self, tasks_dict: Dict[str, dict]) -> bool:
