@@ -99,6 +99,8 @@ def run_scheduler(task_set_path: str = _TASK_SET_PATH) -> dict:
         price_path=config.price_path,
         horizon=config.horizon,
         epsilon=config.epsilon,
+        time_limit=config.l1_time_limit,
+        gap_rel=config.l1_gap_rel,
     )
     result = scheduler.run()
 

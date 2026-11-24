@@ -32,6 +32,10 @@ class VppConfig(BaseModel):
     # Magic Numbers
     horizon: int = 72
     epsilon: float = 1e-6
+    # Level 1 MILP 求解上限：超過時限或 gap ≤ l1_gap_rel 就回傳目前最佳可行解
+    # （設成 None 代表不限，一定證明到最佳；難的任務集可能要 5 分鐘以上）
+    l1_time_limit: Optional[int] = 120
+    l1_gap_rel: Optional[float] = 0.01
     # Seed for the periodic task-set generator.
     # None  → 每次執行都產生不同的任務集（隨機）
     # 整數  → 固定任務集，每次結果完全相同（適合 demo 或報告時使用）

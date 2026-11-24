@@ -521,14 +521,14 @@ class AdvancedScheduler:
             # 凍結已承諾的前綴（tol=1e-3 比 default 1e-6 寬鬆，
             # 容許 CBC gap 求解 + 浮點殘差，避免 presolve 把近似可行解認定為 infeasible）
             formulator.pin_prefix(self._raw, upto_tick, tol=1e-3)
-        # 強制單執行緒：CBC 多執行緒 + timeLimit 在 Windows 上會卡死（worker 不退出）
-        # 單執行緒同時保證每次求解結果完全可重現
+        # 不傳 threads：CBC 預設就是序列（serial）求解，結果可重現。
+        # 傳 -threads N（即使 N=1）會啟用 CBC 的平行分支模式，在 Windows 的
+        # PuLP 內建 CBC 上部分模型會死結（CPU 閒置、timeLimit 失效、永遠不返回）
         formulator.prob.solve(
             pulp.PULP_CBC_CMD(
                 msg=0,
                 gapRel=self._gap_rel,    # 允許 gap_rel 內的次優解（加速求解）
                 timeLimit=self._time_limit,  # 超時就用目前最佳解
-                threads=1,
             )
         )
         # CBC 狀態：Optimal = 找到可行解（在 gap 或時限內）；Infeasible = 無可行解

@@ -27,6 +27,8 @@ class RTScheduler:
         assets: ProcessorSettingsSystem | None = None,
         tasks: TaskSystem | None = None,
         prices: PriceSystem | None = None,
+        time_limit: int | None = 120,
+        gap_rel: float | None = 0.01,
     ) -> None:
         """Initializes the scheduler with paths or pre-loaded dependency models.
 
@@ -39,12 +41,19 @@ class RTScheduler:
             assets: Optional pre-loaded ProcessorSettingsSystem aggregate (DI).
             tasks: Optional pre-loaded TaskSystem aggregate (DI).
             prices: Optional pre-loaded PriceSystem aggregate (DI).
+            time_limit: CBC wall-clock limit in seconds; the best feasible
+                solution found so far is returned when it is hit. ``None``
+                disables the limit (solve to proven optimality).
+            gap_rel: Relative MIP gap at which CBC stops early. ``None`` uses
+                CBC's default (prove optimality).
         """
         self._processor_settings_path = processor_settings_path
         self._task_set_path = task_set_path
         self._price_path = price_path
         self._horizon = horizon
         self._epsilon = epsilon
+        self._time_limit = time_limit
+        self._gap_rel = gap_rel
 
         # Dependency Injection support
         self._assets = assets
@@ -96,8 +105,16 @@ class RTScheduler:
         # Step 4：呼叫 CBC solver 求解
         # PULP_CBC_CMD 是 PuLP 內建的開源 MILP solver（CBC）
         # msg=1 → 印出 solver 的求解過程 log
+        # timeLimit / gapRel：難的任務集證明最佳解可能要 5 分鐘以上（實測 seed 11
+        # 要 290 秒），但很早就有接近最佳的可行解；periodic deadline 是硬限制，
+        # 任何可行解都滿足，時限只影響目標值品質。停在時限時 PuLP 仍回傳 Optimal。
+        # 不傳 threads：CBC 預設序列求解；-threads 在 Windows 會死結（見 advanced_scheduler）
         # 求解成功 → status = "Optimal"；否則拋出例外
-        formulator.prob.solve(pulp.PULP_CBC_CMD(msg=1))
+        formulator.prob.solve(
+            pulp.PULP_CBC_CMD(
+                msg=1, timeLimit=self._time_limit, gapRel=self._gap_rel
+            )
+        )
         status = pulp.LpStatus[formulator.prob.status]
         if status != "Optimal":
             raise RuntimeError(f"Solver did not find optimal solution: {status}")
