@@ -231,3 +231,6 @@ output/*
 
 # But do not ignore the .gitkeep file
 !output/.gitkeep
+
+# TA-provided checker (kept locally, not published)
+test2/
